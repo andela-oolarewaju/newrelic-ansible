@@ -1,0 +1,55 @@
+---
+- name: clone git repository
+  git: repo={{repo_name}} dest={{ansible_env.PWD}}/{{app_dir}} update=no
+  tags:
+    - git_clone
+
+- name: npm install existing packages
+  npm: path={{ansible_env.PWD}}/{{app_dir}}
+
+- name: install newrelic and forever package
+  npm: name={{item}} path={{ansible_env.PWD}}/{{app_dir}}
+  with_items:
+    - newrelic
+    - forever
+  tags:
+    - newrelic_forever
+
+- name: install forever globally
+  npm: name=forever path={{ansible_env.PWD}}/{{app_dir}} global=yes
+  tags:
+    - newrelic_forever
+
+- name: copy newrelic js file in app directory
+  copy: src={{ansible_env.PWD}}/{{app_dir}}/node_modules/newrelic/newrelic.js dest={{ansible_env.PWD}}/{{app_dir}} remote_src=True
+  tags:
+    - newrelic_setup
+
+- name: insert app name in newrelic.js file
+  lineinfile:
+    dest: "{{ansible_env.PWD}}/{{app_dir}}/node_modules/newrelic/newrelic.js"
+    regexp: "app_name:" 
+    line: "  app_name: {{ app_name }}" 
+    state: present
+  tags:
+    - newrelic_setup
+
+- name: insert license key in newrelic.js file
+  lineinfile:
+    dest: "{{ansible_env.PWD}}/{{app_dir}}/newrelic.js"
+    regexp: "license_key:" 
+    line: "  license_key: {{ license_key }}," 
+    state: present
+  tags:
+    - newrelic_setup
+
+- name: require newrelic in server.js 
+  lineinfile:
+    dest: "{{ansible_env.PWD}}/{{app_dir}}/server.js"
+    insertafter: "'use strict';"
+    line: "require('newrelic');" 
+  tags:
+    - newrelic_setup
+
+- name: start app
+  command: chdir={{ansible_env.PWD}}/{{app_dir}} forever start {{ startup_script }}
